@@ -7,6 +7,7 @@ proxy:
   port: 8880
   authentication: none
   admin-groups: scientists
+  container-wait-time: 30000
   # Example: 'simple' authentication configuration
   users:
   - name: ize
