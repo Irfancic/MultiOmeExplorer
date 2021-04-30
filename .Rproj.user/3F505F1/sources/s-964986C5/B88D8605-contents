@@ -1,0 +1,79 @@
+# Additional data for the gene lists
+################
+
+
+disease_df = read_csv("~/Documents/projects/ID/data/SysID/disease-info.csv")
+tf_df = read_csv("~/Documents/projects/ID/data/SysID/transcription-factor.csv")
+neuroscreen_df = read_csv("~/Documents/projects/ID/data/SysID/neuronal-screen.csv")
+wingscreen_df = read_csv("~/Documents/projects/ID/data/SysID/wing-screen.csv")
+sysid_genelist = read_csv("~/Documents/projects/ID/data/SysID/human-gene-info-20190619.csv")
+
+# annotate information from the human protein atlas
+housekeeping_df = read_tsv("~/Documents/projects/data/HPA/housekeeping_proteome.tsv")
+tissue_rna_df = read_tsv("~/Documents/projects/data/HPA/rna_tissue_consensus.tsv")
+brain_rna_df = read_tsv("~/Documents/projects/data/HPA/rna_brain_gtex.tsv")
+mouse_allen_rna_df = read_tsv("~/Documents/projects/data/HPA/rna_mouse_brain_allen.tsv")
+
+calcium_function_df = readxl::read_xls("~/Documents/projects/ID/data/Calcium_fn_genes_CaGeDb.xls")
+calcium_function_df_combn = distinct(calcium_function_df, gene_symbol) %>% mutate(CalciumFunction = T)
+#  expression in combined HPA, GTEx
+rna_expression_normalised = "./"
+
+
+library(readxl)
+PSD_exp = read_xlsx("~/Documents/projects/ID/data/Brain_expression/barreslab_rnaseq.xlsx")
+
+
+# map gene name to other IDs
+gene_data = read_tsv("~/Documents/projects/data/geneDatabase.txt", col_types = 'cc------dc---')
+
+
+##############
+# modify the expression data set: taking into account those that we are interested
+# combine brain expression data from the HPA & other tissue RNA from HPA
+columnnames = c("name","region","expression","data")
+brain_rna_df_mod = brain_rna_df %>% dplyr::select(`Gene name`, `Brain region`, NX) %>% mutate(data = "Human brain")
+tissue_rna_df_mod = tissue_rna_df %>% dplyr::select(`Gene name`, Tissue, NX) %>% filter(Tissue %in% c("adrenal gland", "bone marrow")) %>% mutate(data = "GTEx")
+
+colnames(brain_rna_df_mod) = columnnames
+colnames(tissue_rna_df_mod) = columnnames
+
+expression_df = rbind(brain_rna_df_mod, tissue_rna_df_mod)
+expression_df = distinct(expression_df, name, region, .keep_all = T) 
+#expression_df$ID = expression_df$name %in% ID_all$ID
+
+# from long to wide
+expression_df_wide = spread(expression_df %>% select(-data), key = `region`, value = `expression`)
+
+# modify the wing and neuroscreen: whether percent of evidence found to show any phenotypes
+################
+wingscreen_df_combn = wingscreen_df %>% group_by(`Human gene symbol`) %>% 
+  summarise(WingPhenotype = mean(`Any phenotype`)>0)
+
+Neurocreen_df_combn = neuroscreen_df %>% group_by(`Human gene symbol`) %>% 
+  summarise(NeuroScreenPhenotype = mean(`Any phenotype`)>0)
+
+# combine all the information
+########## 
+additional_data_df = full_join(tf_df, Neurocreen_df_combn
+                    , by = c( "Gene symbol"= "Human gene symbol")) 
+
+additional_data_df = full_join(additional_data_df, wingscreen_df_combn,
+                               by = c( "Gene symbol"= "Human gene symbol")) 
+
+additional_data_df = full_join(additional_data_df, housekeeping_df %>% select(Gene) %>% mutate(HouseKeeping = T),
+                               by = c( "Gene symbol"= "Gene")) 
+
+additional_data_df = full_join(additional_data_df, expression_df_wide,
+                               by = c( "Gene symbol"= "name")) 
+
+additional_data_df = full_join(additional_data_df, calcium_function_df_combn,
+                               by = c( "Gene symbol"= "gene_symbol")) 
+
+additional_data_df = left_join(additional_data_df, gene_data, by = c('Gene symbol' = "Approved Symbol"))
+
+
+
+write_tsv(additional_data_df, "~/Documents/projects/ID/IDome/cache/combined_gene_phenotypes_expression.tsv")
+saveRDS(additional_data_df,  "~/Documents/projects/ID/IDome/cache/combined_gene_phenotypes_expression.RDS")
+                               

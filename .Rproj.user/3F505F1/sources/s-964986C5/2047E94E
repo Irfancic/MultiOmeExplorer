@@ -1,0 +1,26 @@
+{
+    "id": "2047E94E",
+    "path": "~/Documents/projects/MultiOmeExplorer/server.R",
+    "project_path": "server.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1575464863015.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "cursorPosition": "14,2",
+        "scrollLine": "0",
+        "tempName": "Untitled1",
+        "Source": "Source"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1619779634,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1619779634967,
+    "read_only": false,
+    "read_only_alternatives": []
+}

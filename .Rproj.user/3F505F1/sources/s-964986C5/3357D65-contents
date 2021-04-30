@@ -1,0 +1,125 @@
+library(DT)
+library(ROCit)
+library(igraph)
+
+##################
+# Download ranking data
+#################
+ranking_df = list()
+ranking_df$all = readRDS("~/Documents/projects/ID/IDome/cache/rank_all_ID_df.RDS")
+#write_tsv(ranking_df$all,  "~/Documents/projects/ID/IDome/cache/rank_all_ID_df.tsv")
+ranking_df$severe = readRDS("~/Documents/projects/ID/IDome/cache/rank_severity_df.RDS")
+ranking_df$syndromic = readRDS("~/Documents/projects/ID/IDome/cache/rank_syndromicity_df.RDS")
+
+# ID candidate
+sysid_genes = read_csv("~/Documents/projects/ID//data/SysID/sysID_list_20190513.csv")
+candidate_genes = sysid_genes %>% dplyr::filter(grepl(pattern =  "candidate", x = `Gene group`)) %>% pull(`Gene symbol`) %>% unique
+
+##################
+# add gene info
+phenodata = readRDS("../IDome/cache/combined_gene_phenotypes_expression.RDS")
+
+
+for(i in names(ranking_df)){
+  ranking_df[[i]] = left_join(ranking_df[[i]], phenodata, by = c("GeneName" = "Gene symbol"))
+  write_tsv(ranking_df[[i]], paste0("../IDome/cache/prediction_result_annotate_seed=",i,".tsv"))
+}
+
+
+# Modify the ranking df
+## - sort by rank for GeomP
+## - add candidate gene
+
+##################
+# Perform ROC computation
+#################
+roc = list()
+roc$candidate = list()
+roc$trueset = list()
+
+rank_columns = c("RankAllAvg" , "RankEachAvg" ,"RankArithmP" ,"RankGeomP")
+for(i in names(ranking_df)){
+  ranking_df[[i]]$candidate = ranking_df[[i]]$GeneName %in% candidate_genes
+  ranking_df[[i]] = ranking_df[[i]][order(ranking_df[[i]]$RankGeomP),]
+  
+  roc$candidate[[i]] = apply(ranking_df[[i]][,rank_columns], 2, function(x) rocit(score=-x,class=ranking_df[[i]][,"candidate"]))
+  
+  if(i!="all"){
+    roc$trueset[[i]] = apply(ranking_df[[i]][,rank_columns], 2, function(x) rocit(score=-x,class=ranking_df[[i]][,"trueset"]))
+    }
+}
+
+##################
+# LCC significant network: saved as LCC_results
+#################
+# load LCC resuls
+LCC_all = readRDS("~/Documents/projects/Multiome/analysis/disNet_specificity/results/output/ID_Multiome_coex_by_mergedgroup_specific_two_tissues/LCC_and_distance_calculation_results_added_all_tissues.RDS")
+LCC_subsets = readRDS("~/Documents/projects/Multiome/analysis/disNet_specificity/results/output/ID_Multiome_sysID_by_group_new/LCC_and_distance_calculation_results.RDS")
+
+source("~/Documents/projects/Multiome/functions/readdata_functions.R")
+ID_by_group = process_disease_genes_data("../gene_list/sysID_gene_list_by_group_and_severity_syndromicity_level.tsv", min_gene = 5, max_gene = 2000)
+
+LCC_results = list()
+LCC_results$all = LCC_all %>% dplyr::filter(LCC.zscore > 1.68) %>% dplyr::select(network, LCC.zscore)
+LCC_results$severe = LCC_subsets %>% 
+  dplyr::filter(LCC.zscore > 1.68,  LCC.size >= 5, name == "severity: high") %>% 
+  dplyr::select(network, LCC.zscore)
+LCC_results$syndromic = LCC_subsets %>% 
+  dplyr::filter(LCC.zscore > 1.68,  LCC.size >= 5, name == "syndromicity: low") %>% 
+  dplyr::select(network, LCC.zscore)
+
+##################
+# Save seedlist
+#################
+# load seedlist
+seedlist = list()
+seedlist$all = scan("~/Documents/projects/ID/data/ID_genes_combined_vissers_sysID.tsv", what = "") 
+seedlist$severe = ID_by_group$disgene_list$`severity: high`
+seedlist$syndromic = ID_by_group$disgene_list$`syndromicity: low`
+
+
+##################
+# load relevant networks
+## compute connectivity p-values
+#################
+relevant_networks = sapply(LCC_results, function(x) x$network) %>% unlist %>% unique
+paths = list.files(path = "../../Multiome/networks/network_edgelists/", full.names = T, pattern = paste0(relevant_networks, collapse = "|"))
+g = process_graph_data(graph_path = paths)
+
+# compute connectivity pvals
+source("../../Multiome/functions/LCC_functions.R")
+connectpval = lapply(g, function(graph) t(sapply(V(graph)$name, function(node) connectvity_pval(graph, node, seedlist$all))))
+
+connectpval_df  = lapply(connectpval, as.data.frame)
+
+for(i in names(connectpval_df)){
+  connectpval_df[[i]] = as.data.frame(connectpval_df[[i]])
+  connectpval_df[[i]]$pval[connectpval_df[[i]]$all_neighbours < 5] = NA
+  connectpval_df[[i]] = connectpval_df[[i]][order(connectpval_df[[i]]$pval, decreasing = F),]
+  connectpval_df[[i]]$GeneName = rownames(connectpval_df[[i]])
+  connectpval_df[[i]]$network = i
+}
+connectpval_df = bind_rows(connectpval_df)
+
+# compute hub score
+hubscore_compute = function(name_g){
+  scores = igraph::authority_score(g[[name_g]])$vector
+  scores_df = tibble(network = name_g, GeneName = names(scores), hubscore = scores)
+  return(scores_df)
+}
+
+hubscores = lapply(names(g), hubscore_compute)
+names(hubscores) = names(g)
+hubscores_df = bind_rows(hubscores)
+
+connectpval_df = left_join(connectpval_df, hubscores_df)
+connectpval_df$mlogpval = -log10(connectpval_df$pval)
+
+# remove graph objects from the final bundled data
+rm(g)
+
+
+
+save.image(file = "shinydata.RData")
+
+

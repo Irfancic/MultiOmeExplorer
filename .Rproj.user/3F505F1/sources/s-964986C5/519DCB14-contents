@@ -1,0 +1,22 @@
+pacman::p_load("vcfR")
+
+my_vcf = read.vcfR("~/Documents/projects/myDNA/data/60820188482964.filtered.snp.vcf.gz", verbose = FALSE )
+chrom <- create.chromR(name='Supercontig', vcf=my_vcf)
+
+plot(chrom)
+plot(masker(chrom, min_QUAL = 1, min_DP = 1, max_DP = 100))
+
+chromoqc(chrom, dp.alpha=20)
+
+vcf_df = my_vcf@gt[,2]
+
+depth_extract = function(char){
+  as.integer(strsplit(char, ":")[[1]][4])
+}
+
+depth_variants = sapply(vcf_df, depth_extract)
+
+length_df = tibble(length = depth_variants)
+length_df = length_df %>% count(length)
+
+ggplot(length_df %>% dplyr::filter(!is.na(length))) + geom_col(aes(x = length, y = n)) + scale_x_log10()

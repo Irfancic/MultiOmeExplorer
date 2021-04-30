@@ -1,0 +1,28 @@
+# Process data from precomputed data 
+
+load("./preloadeddata.RData")
+
+subgraphs <- list()
+
+for(disease_of_interest in names(rare_genetic_diseases_genes$disgene_list)){
+  subgraphs[[disease_of_interest]] <- list()
+  genes_set <- rare_genetic_diseases_genes$disgene_list[[disease_of_interest]]
+  
+  for(graph_of_interest in network_info$network){
+    disease_graph <- g[[graph_of_interest]]- setdiff(V(g[[graph_of_interest]])$name, genes_set)
+    
+    Isolated = which(degree(disease_graph)==0)
+    disease_graph = delete.vertices(disease_graph, Isolated)
+    
+    subgraphs[[disease_of_interest]][[graph_of_interest]] <- disease_graph
+  }
+}
+
+save(list = c("diseases", "network_info", "processed_result_df", "rare_genetic_diseases_genes", "subgraphs"), file = "./data/precomputedData_server.RData")
+
+diseases_below_1000 <- rare_genetic_diseases_genes$disgene_df %>%
+  filter(N<1000) %>% arrange(N) %>% pull(name)
+
+network_name <- network_info$subtype
+
+save(list = c("diseases", "diseases_below_1000", "network_name"), file = "./data/precomputedData_ui.RData")
