@@ -1,6 +1,9 @@
 
 # load required packages
 library(pacman)
+library(dplyr)
+library(tibble)
+library(ggplot2)
 p_load(ggplot2, visNetwork, igraph, RColorBrewer, shiny, cowplot, DT)
 
 # load required data

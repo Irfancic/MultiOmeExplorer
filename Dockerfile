@@ -18,6 +18,8 @@ RUN R -e "install.packages(c('shiny', 'rmarkdown'), repos='https://cloud.r-proje
 
 # install dependencies of the multiome app
 RUN R -e "install.packages('pacman')"
+RUN R -e "install.packages(c('visNetwork', 'ggiraph', 'cowplot', 'igraph'))"
+RUN R -e "install.packages(c('tibble', 'dplyr', 'ggplot2'), repos='https://cloud.r-project.org/')"
 
 # copy the app to the image
 RUN mkdir /root/app
